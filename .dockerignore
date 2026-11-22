@@ -1,0 +1,5 @@
+profiles/
+.streamlit/secrets.toml
+_pycache_/
+.git/
+*.md
