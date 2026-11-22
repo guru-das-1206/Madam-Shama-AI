@@ -63,16 +63,3 @@ share.streamlit.io → connect GitHub → main file `app.py` → Advanced settin
 ---
 ## Voice typing
 🎤 types your words live into the box. In Chat/Interview, **📤 Send** sends it. In other boxes, tap the box first, tap 🎤, then **✅ Done**, then press the page's own button. Works in Chrome/Edge.
-
-## If something fails
-- Build fails: open Cloud Build → History → read the red error.
-- App shows an error on start: check the secret is mounted at `/app/.streamlit/secrets.toml` and the roles in step 4.
-- `redirect_uri_mismatch`: the URI in Google Console must match `redirect_uri` exactly.
-- "Access blocked": add the email as a Test user.
-- File upload gives a 403 error: this can happen behind some proxies; tell me the exact message and I'll help.
-
-## Please verify in current docs
-`st.login` needs Streamlit 1.42+; mounting secrets as a file in Cloud Run; role names; Gemini model names.
-
-## Before real students use it
-Tell them what you store (progress and files), let them delete files and their profile, and get permission from schools/parents for minors.
