@@ -1,0 +1,8 @@
+streamlit>=1.42
+Authlib>=1.3.2
+google-genai
+google-cloud-firestore
+google-cloud-storage
+gTTS
+pandas
+PyPDF2
