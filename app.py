@@ -112,7 +112,9 @@ def pfile(uid): return f"profiles/{uid}.json"
 def get_gcp():
     """Connect to Firestore (progress) and Cloud Storage (uploads). Returns (db, bucket, error)."""
     try: info = dict(st.secrets["gcp_service_account"])
-    except Exception: info = None
+    except Exception:
+        try: info = json.loads(st.secrets["gcp_service_account_json"])   # whole JSON key file pasted as text
+        except Exception: info = None
     if info is None and not os.environ.get("K_SERVICE"): return None, None, None   # not configured -> local mode
     try:
         from google.cloud import firestore, storage
@@ -767,6 +769,65 @@ def mode_progress():
         r = readiness(); st.markdown(f"### 🏆 Readiness: **{r['total']}/100**  |  🔥 {streak()}-day streak")
         for k, (v, mx) in r["parts"].items(): st.write(f"- {k}: {v}/{mx}")
 
+def extract_text(f):
+    """Turn an upload into plain text: .txt directly, PDF text, or Gemini reads images/scanned PDFs."""
+    data = f.getvalue(); n = f.name.lower()
+    if n.endswith(".txt"): return data.decode("utf-8", "ignore").strip()[:30000]
+    text = ""
+    if n.endswith(".pdf"):
+        try: text = "\n".join((p.extract_text() or "") for p in PyPDF2.PdfReader(io.BytesIO(data)).pages)
+        except Exception: text = ""
+        if len(text.strip()) < 50:
+            text = ask("Transcribe all the text in this document. Return only the text.", system="You are an OCR tool.", media=(data, "application/pdf"))
+    else:
+        text = ask("Transcribe all the text in this image. Return only the text.", system="You are an OCR tool.", media=(data, f.type or "image/png"))
+    return "" if text.startswith("AI Error") else text.strip()[:30000]
+
+def lib_run(act, q, text):
+    if act.startswith("📝"):
+        out = ask(f"Summarise this study material in 6 short bullets, then list 5 key terms.\n\n{text}")
+    elif act.startswith("❓"):
+        out = ask(f"Using ONLY this study material, answer the student's question. If it isn't covered, say so.\nQuestion: {q}\n\n{text}")
+    else:
+        qs = [x for x in (jload(ask(f"Generate 5 MCQs strictly from this study material. Set topic to the specific topic. Return ONLY a JSON array like: {QSCHEMA}\n\nMaterial:\n{text}", json_mode=True)) or []) if valid_mcq(x)]
+        if qs:
+            st.session_state["quiz"] = {"qs": qs, "id": time.time(), "done": False}
+            out = "✅ Your quiz is ready! Open **🧠 Rapid Quiz** in the sidebar to take it."
+        else: out = "Sorry, I couldn't make a quiz from that file. Try another."
+    st.session_state["lib_out"] = out
+
+def mode_library_fs():
+    """Library without a Cloud Storage bucket: keeps the extracted TEXT of each file in Firestore."""
+    if not DB:
+        st.info("Library needs cloud saving (Firestore) turned on. Follow README.md."); return
+    col = DB.collection("profiles").document(st.session_state.uid).collection("library")
+    st.caption("ℹ️ Madam Shama keeps the text of your files (not the original file or pictures).")
+    ups = st.file_uploader("Upload files (PDF, image, text; max 5 MB each)", type=["pdf", "png", "jpg", "jpeg", "txt"], accept_multiple_files=True)
+    if ups and st.button("⬆️ Save to my library", type="primary"):
+        with st.spinner("Reading your files..."):
+            for f in ups:
+                if f.size > 5 * 1024 * 1024: st.warning(f"{f.name} is over 5 MB, skipped."); continue
+                text = extract_text(f)
+                if len(text) < 20: st.warning(f"Couldn't read any text from {f.name}."); continue
+                col.document(re.sub(r"[^A-Za-z0-9._-]", "_", f.name)).set({"name": f.name, "text": text, "added": datetime.utcnow().isoformat()})
+        touch(); save(); st.success("Saved to your library!")
+    try: docs = list(col.stream())
+    except Exception as e: st.error(f"Couldn't open your library: {e}"); return
+    if not docs: st.info("Your library is empty."); return
+    d = st.selectbox("Your files", docs, format_func=lambda x: x.to_dict().get("name", x.id))
+    act = st.radio("What should Madam Shama do?", ["📝 Summarise", "🧠 Quiz me from this", "❓ Ask a question"], horizontal=True)
+    q = ""
+    if act.startswith("❓"):
+        q = st.text_input("Your question:"); live_mic("focus")
+    c1, c2 = st.columns(2)
+    if c1.button("▶️ Go", type="primary", use_container_width=True):
+        with st.spinner("Reading your notes..."): lib_run(act, q, d.to_dict().get("text", ""))
+        touch(); save()
+    if c2.button("🗑️ Delete this file", use_container_width=True):
+        d.reference.delete(); st.session_state.pop("lib_out", None); st.rerun()
+    if st.session_state.get("lib_out"):
+        with st.chat_message("assistant", avatar="👩‍🏫"): st.markdown(st.session_state["lib_out"])
+
 def read_material(blob):
     data = blob.download_as_bytes(); n = blob.name.lower()
     if n.endswith(".txt"): return data.decode("utf-8", "ignore")[:12000], None
@@ -780,7 +841,7 @@ def mode_library():
     st.subheader("📚 My Library")
     st.write("Upload your notes, syllabus or past papers. Madam Shama can summarise them, answer questions and quiz you from them.")
     if not BUCKET:
-        st.info("Cloud Storage isn't connected yet. Follow README.md to turn this on."); return
+        mode_library_fs(); return
     prefix = f"users/{st.session_state.uid}/"
     ups = st.file_uploader("Upload files (PDF, image, text; max 10 MB each)", type=["pdf", "png", "jpg", "jpeg", "txt"], accept_multiple_files=True)
     if ups and st.button("⬆️ Save to my library", type="primary"):
