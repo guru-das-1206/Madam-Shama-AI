@@ -29,6 +29,12 @@ html, body, [class*="css"], button, input, textarea, select { font-family: 'Popp
 .avatar { font-size: 54px; } .name-tag { font-size: 13px; font-weight: 600; }
 .feature-card { background: rgba(30,41,59,.6); padding: 18px; border-radius: 16px; border: 1px solid #334155; text-align:center; height:100%; }
 .tech-badge { background:#1e293b; padding:6px 12px; border-radius:20px; font-size:14px; color:#8b5cf6; border:1px solid #334155; font-weight:600; display:inline-block; margin-bottom:16px; }
+h1, h2, h3, h4, h5, h6, p, li, label, [data-testid="stWidgetLabel"] p, [data-testid="stCaptionContainer"], .stTabs [data-baseweb="tab"] p { color: #f8fafc !important; }
+input, textarea, [data-baseweb="select"] > div, [data-baseweb="input"] { background-color: #1e293b !important; color: #f8fafc !important; }
+::placeholder { color: #94a3b8 !important; }
+button[kind="secondary"], [data-testid="stBaseButton-secondary"] { background-color: #1e293b !important; color: #f8fafc !important; border: 1px solid #334155 !important; }
+[data-testid="stFileUploaderDropzone"] { background-color: #1e293b !important; }
+[data-testid="stForm"] { border: 1px solid #334155; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
